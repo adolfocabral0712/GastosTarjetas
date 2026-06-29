@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gastos Tarjeta</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f4f0; --surface: #fff; --surface2: #f9f8f5;
+    --border: rgba(0,0,0,0.08); --text: #0b0b0b; --text2: #52514e; --text3: #898781;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141413; --surface:#1e1e1c; --surface2:#252523; --border:rgba(255,255,255,0.08); --text:#fff; --text2:#c3c2b7; --text3:#898781; }
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* LOGIN */
+  #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+  .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 36px 32px; width: 100%; max-width: 360px; text-align: center; }
+  .login-icon { font-size: 40px; margin-bottom: 12px; }
+  .login-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .login-sub { font-size: 13px; color: var(--text3); margin-bottom: 28px; }
+  .pin-dots { display: flex; justify-content: center; gap: 14px; margin-bottom: 28px; }
+  .pin-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); background: transparent; transition: all 0.15s; }
+  .pin-dot.filled { border-color: #2a78d6; background: #2a78d6; }
+  .pin-dot.error { border-color: #e34948; background: #e34948; }
+  .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .num-btn {
+    padding: 16px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); font-size: 18px; font-weight: 600;
+    cursor: pointer; transition: all 0.12s; user-select: none;
+  }
+  .num-btn:active { transform: scale(0.94); background: var(--border); }
+  .num-btn.del { font-size: 14px; color: var(--text3); }
+  .login-error { font-size: 13px; color: #e34948; margin-top: 16px; min-height: 20px; }
+
+  /* DASHBOARD */
+  #app { display: none; padding: 20px 16px 40px; }
+  .topbar { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+  .topbar-left h1 { font-size: 20px; font-weight: 600; }
+  .topbar-left .subtitle { font-size: 13px; color: var(--text3); margin-top: 2px; }
+  .logout-btn { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text2); font-size: 12px; cursor: pointer; }
+  .logout-btn:hover { background: var(--surface2); }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: var(--surface); border-radius: var(--radius); padding: 16px; border: 1px solid var(--border); }
+  .kpi-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  .kpi-val { font-size: 24px; font-weight: 700; }
+  .kpi-sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+  .card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 16px; overflow: hidden; }
+  .card-header { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--text2); display: flex; justify-content: space-between; align-items: center; }
+  .badge { font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 20px; }
+  .chart-wrap { padding: 16px; position: relative; height: 220px; }
+
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .items-table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
+  .items-table th { padding: 8px 12px; text-align: right; font-weight: 600; font-size: 11px; color: var(--text3); white-space: nowrap; border-bottom: 2px solid var(--border); background: var(--surface2); }
+  .items-table th:first-child { text-align: left; position: sticky; left: 0; z-index: 2; background: var(--surface2); min-width: 200px; }
+  .items-table td { padding: 7px 12px; white-space: nowrap; border-bottom: 1px solid var(--border); text-align: right; color: var(--text2); }
+  .items-table td:first-child { text-align: left; color: var(--text); position: sticky; left: 0; background: var(--surface); z-index: 1; min-width: 200px; font-size: 12px; }
+  .items-table tr:hover td { background: var(--surface2); }
+  .items-table tr:hover td:first-child { background: var(--surface2); }
+  .items-table .zero { color: var(--text3); }
+  .items-table .neg { color: #1baf7a; }
+  .footer { text-align: center; font-size: 11px; color: var(--text3); margin-top: 24px; }
+  .data-status { display:none; margin: -8px 0 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); color: var(--text2); font-size: 12px; }
+  .data-status.error { display:block; border-color: rgba(227,73,72,.35); color: #d83f3e; }
+  .data-status.loading { display:block; color: var(--text2); }
+  .data-status.success { display:block; border-color: rgba(27,175,122,.35); color: #16865d; }
+  .data-status.success { display:block; border-color: rgba(27,175,122,.35); color: #16835c; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-icon">💳</div>
+    <div class="login-title">Gastos tarjeta</div>
+    <div class="login-sub">Ingresá tu PIN para continuar</div>
+    <div class="pin-dots" id="pin-dots">
+      <div class="pin-dot" id="d0"></div>
+      <div class="pin-dot" id="d1"></div>
+      <div class="pin-dot" id="d2"></div>
+      <div class="pin-dot" id="d3"></div>
+    </div>
+    <div class="numpad">
+      <button class="num-btn" onclick="addDigit('1')">1</button>
+      <button class="num-btn" onclick="addDigit('2')">2</button>
+      <button class="num-btn" onclick="addDigit('3')">3</button>
+      <button class="num-btn" onclick="addDigit('4')">4</button>
+      <button class="num-btn" onclick="addDigit('5')">5</button>
+      <button class="num-btn" onclick="addDigit('6')">6</button>
+      <button class="num-btn" onclick="addDigit('7')">7</button>
+      <button class="num-btn" onclick="addDigit('8')">8</button>
+      <button class="num-btn" onclick="addDigit('9')">9</button>
+      <button class="num-btn del" onclick="clearPin()">✕</button>
+      <button class="num-btn" onclick="addDigit('0')">0</button>
+      <button class="num-btn del" onclick="delDigit()">⌫</button>
+    </div>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>💳 Mis gastos</h1>
+      <div class="subtitle" id="hoy"></div>
+    </div>
+    <button class="logout-btn" onclick="logout()">Cerrar sesión</button>
+  </div>
+  <div class="data-status" id="data-status"></div>
+  <div class="kpi-row" id="kpis"></div>
+  <div class="card">
+    <div class="card-header">Evolución mensual <span class="badge" id="chart-badge"></span></div>
+    <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-header">Detalle — todos los meses</div>
+    <div class="table-scroll"><table class="items-table" id="items-table"></table></div>
+  </div>
+  <div class="footer" id="footer"></div>
+</div>
+
+<script>
+// ── PINS ── cambiá estos valores por los que quieras
+const PINS = {
+  mama: '1111',
+  nena: '2222',
+  lu:   '3333',
+  vale: '4444'
+};
+
+let MESES = [];
+const COLORS = { mama:'#2a78d6', nena:'#1baf7a', lu:'#eda100', vale:'#4a3aa7' };
+
+// Los datos se cargan exclusivamente desde datos_gastos.json en Dropbox.
+// No hay datos precargados dentro de este HTML.
+let DATA = {};
+
+// ── DATOS EXTERNOS EN DROPBOX ──
+// Pegá aquí el enlace COMPARTIDO del archivo datos_gastos.json.
+// Ejemplo: https://www.dropbox.com/scl/fi/xxxxx/datos_gastos.json?rlkey=xxxxx&dl=0
+const URL_ARCHIVO_DROPBOX = 'https://dl.dropbox.com/scl/fi/6vwg74t0ge825a199nzmf/datos_gastos.json?rlkey=2ka931l7e2ofabidlwkguj43z&dl=0';
+
+let datosDropboxCargados = false;
+let cargaDatosPromise = null;
+
+function linkDropboxDirecto(link) {
+  const url = new URL(link);
+  const host = url.hostname.toLowerCase();
+
+  // Los enlaces que comienzan por dl.dropboxusercontent.com ya son enlaces
+  // directos al archivo. No se modifican.
+  if (host === 'dl.dropboxusercontent.com') {
+    // No hacer cambios de formato al enlace directo.
+  }
+  // Los enlaces compartidos normales de Dropbox se convierten a contenido directo.
+  else if (host === 'www.dropbox.com' || host === 'dropbox.com') {
+    url.searchParams.delete('dl');
+    url.searchParams.set('raw', '1');
+  }
+
+  // Evita que el navegador use una versión anterior guardada en caché.
+  url.searchParams.set('_', Date.now().toString());
+  return url.toString();
+}
+
+function validarYAplicarDatos(datos) {
+  const personas = datos?.personas || datos?.data;
+  if (!datos || !Array.isArray(datos.meses) || !personas || typeof personas !== 'object') {
+    throw new Error('El archivo no tiene la estructura esperada: meses y personas.');
+  }
+
+  const meses = datos.meses.map(String);
+  if (meses.length === 0) {
+    throw new Error('El archivo no tiene meses para mostrar.');
+  }
+
+  for (const [clave, persona] of Object.entries(personas)) {
+    if (!persona || !Array.isArray(persona.items)) {
+      throw new Error(`Faltan los ítems de ${clave}.`);
+    }
+    persona.label = String(persona.label || clave);
+    persona.items = persona.items.map(item => ({
+      n: String(item.n ?? ''),
+      v: meses.map((_, i) => Number(item.v?.[i] ?? 0))
+    }));
+    persona.totales = Array.isArray(persona.totales)
+      ? meses.map((_, i) => Number(persona.totales[i] ?? 0))
+      : meses.map((_, i) => persona.items.reduce((s, item) => s + item.v[i], 0));
+  }
+
+  MESES = meses;
+  DATA = personas;
+}
+
+async function cargarDatosDropbox() {
+  if (datosDropboxCargados) return;
+  if (cargaDatosPromise) return cargaDatosPromise;
+
+  const estado = document.getElementById('data-status');
+  if (!URL_ARCHIVO_DROPBOX || URL_ARCHIVO_DROPBOX.includes('PEGAR_AQUI')) {
+    estado.className = 'data-status error';
+    estado.textContent = 'Falta pegar el enlace compartido de datos_gastos.json en el HTML.';
+    return;
+  }
+
+  cargaDatosPromise = (async () => {
+    estado.className = 'data-status loading';
+    estado.textContent = 'Actualizando datos desde Dropbox…';
+
+    try {
+      const enlace = linkDropboxDirecto(URL_ARCHIVO_DROPBOX);
+      const respuesta = await fetch(enlace, { cache: 'no-store', redirect: 'follow' });
+
+      if (!respuesta.ok) {
+        throw new Error(`Dropbox respondió ${respuesta.status}. Revisá que el enlace sea público.`);
+      }
+
+      const texto = await respuesta.text();
+      let datos;
+      try {
+        datos = JSON.parse(texto.replace(/^\uFEFF/, ''));
+      } catch (errorJSON) {
+        const pareceHTML = /<html|<!doctype/i.test(texto);
+        throw new Error(pareceHTML
+          ? 'Dropbox devolvió una página web en vez del JSON. Revisá que compartiste el archivo y no una carpeta.'
+          : 'El contenido descargado no es un JSON válido.');
+      }
+
+      validarYAplicarDatos(datos);
+      datosDropboxCargados = true;
+      estado.className = 'data-status success';
+      estado.textContent = 'Datos leídos desde Dropbox correctamente.';
+    } catch (error) {
+      console.error('No se pudieron cargar los datos de Dropbox:', error);
+      estado.className = 'data-status error';
+      estado.textContent = error.message === 'Failed to fetch'
+        ? 'No se pudo conectar al enlace de Dropbox. Verificá que pegaste un enlace directo que comienza con https://dl.dropboxusercontent.com/ y que el archivo sea público.'
+        : 'No se pudieron actualizar los datos: ' + error.message;
+    } finally {
+      cargaDatosPromise = null;
+    }
+  })();
+
+  return cargaDatosPromise;
+}
+
+function escapeHtml(valor) {
+  return String(valor).replace(/[&<>"']/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;'
+  })[c]);
+}
+
+// ── PIN LOGIC ──
+let pinBuffer = '';
+let chartInst = null;
+
+function addDigit(d) {
+  if (pinBuffer.length >= 4) return;
+  pinBuffer += d;
+  updateDots();
+  if (pinBuffer.length === 4) setTimeout(checkPin, 120);
+}
+
+function delDigit() {
+  pinBuffer = pinBuffer.slice(0, -1);
+  updateDots();
+  document.getElementById('login-error').textContent = '';
+}
+
+function clearPin() {
+  pinBuffer = '';
+  updateDots();
+  document.getElementById('login-error').textContent = '';
+}
+
+function updateDots(state) {
+  for (let i = 0; i < 4; i++) {
+    const d = document.getElementById('d' + i);
+    d.className = 'pin-dot';
+    if (state === 'error') d.classList.add('error');
+    else if (i < pinBuffer.length) d.classList.add('filled');
+  }
+}
+
+async function checkPin() {
+  const match = Object.keys(PINS).find(k => PINS[k] === pinBuffer);
+  if (match) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    await cargarDatosDropbox();
+
+    // Sin datos de respaldo: si Dropbox falla, no se muestran importes antiguos.
+    if (!datosDropboxCargados) {
+      return;
+    }
+
+    if (!DATA[match]) {
+      const estado = document.getElementById('data-status');
+      estado.className = 'data-status error';
+      estado.textContent = `El archivo de Dropbox no contiene datos para "${match}".`;
+      return;
+    }
+
+    loadDashboard(match);
+  } else {
+    updateDots('error');
+    document.getElementById('login-error').textContent = 'PIN incorrecto. Intentá de nuevo.';
+    setTimeout(() => { pinBuffer = ''; updateDots(); }, 800);
+  }
+}
+
+function logout() {
+  pinBuffer = '';
+  updateDots();
+  document.getElementById('login-error').textContent = '';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+}
+
+// ── DASHBOARD ──
+function fmt(v) {
+  const s = '$\u202f' + Math.round(Math.abs(v)).toLocaleString('es-UY');
+  return v < 0 ? '-' + s : s;
+}
+
+function loadDashboard(key) {
+  const p = DATA[key];
+  const col = COLORS[key];
+  const d = new Date().toLocaleDateString('es-UY', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const dl = d.charAt(0).toUpperCase() + d.slice(1);
+  document.getElementById('hoy').textContent = dl;
+  document.getElementById('footer').textContent = 'Datos leídos desde Dropbox · Actualizado al ' + dl;
+
+  // KPIs
+  const baseEstable = p.totales.slice(Math.min(6, p.totales.length));
+  const estable = baseEstable.length ? baseEstable.reduce((a,b)=>a+b,0) / baseEstable.length : 0;
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi">
+      <div class="kpi-label">Mes actual (${escapeHtml(MESES[0] || '—')})</div>
+      <div class="kpi-val" style="color:${col}">${fmt(p.totales[0])}</div>
+      <div class="kpi-sub">Monto a pagar este mes</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Próximo mes (${escapeHtml(MESES[1] || '—')})</div>
+      <div class="kpi-val">${fmt(p.totales[1])}</div>
+      <div class="kpi-sub">Proyectado</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Promedio estable</div>
+      <div class="kpi-val" style="color:#1baf7a">${fmt(estable)}</div>
+      <div class="kpi-sub">Desde Ene-27 en adelante</div>
+    </div>`;
+
+  // Chart
+  document.getElementById('chart-badge').textContent = p.label;
+  document.getElementById('chart-badge').style.cssText = `background:${col}22;color:${col}`;
+  const isDark = matchMedia('(prefers-color-scheme:dark)').matches;
+  const gridC = isDark ? '#2c2c2a' : '#e1e0d9';
+  if (chartInst) chartInst.destroy();
+  chartInst = new Chart(document.getElementById('mainChart'), {
+    type: 'bar',
+    data: {
+      labels: MESES,
+      datasets: [{ data: p.totales, backgroundColor: col+'88', borderColor: col, borderWidth:1, borderRadius:4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{display:false}, tooltip:{ callbacks:{ label: c=>' '+fmt(c.raw) } } },
+      scales: {
+        x: { ticks:{color:'#898781',font:{size:11},maxRotation:45,autoSkip:false}, grid:{color:gridC} },
+        y: { ticks:{color:'#898781',font:{size:11},callback:v=>'$'+(v/1000).toFixed(0)+'k'}, grid:{color:gridC} }
+      }
+    }
+  });
+
+  // Table
+  const header = `<thead><tr><th>Concepto</th>${MESES.map(m=>`<th>${m}</th>`).join('')}</tr></thead>`;
+  // Muestra solo conceptos con al menos un importe distinto de cero.
+  // Así se ocultan filas sin datos, aunque tengan texto en la primera columna.
+  const body = p.items
+    .filter(it => {
+      const concepto = String(it.n ?? '').trim();
+      const tieneImporte = Array.isArray(it.v) && it.v.some(v => Number(v) !== 0);
+      return concepto !== '' && tieneImporte;
+    })
+    .map(it => {
+      const celdas = it.v.map(v => v===0
+        ? `<td class="zero">—</td>`
+        : `<td class="${v<0?'neg':''}">${fmt(v)}</td>`
+      ).join('');
+      return `<tr><td>${escapeHtml(it.n)}</td>${celdas}</tr>`;
+    }).join('');
+  // No se agrega fila Total al final del detalle.
+  document.getElementById('items-table').innerHTML = `${header}<tbody>${body}</tbody>`;
+}
+</script>
+</body>
+</html>
