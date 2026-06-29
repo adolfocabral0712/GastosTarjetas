@@ -59,9 +59,9 @@
   .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .items-table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
   .items-table th { padding: 8px 12px; text-align: right; font-weight: 600; font-size: 11px; color: var(--text3); white-space: nowrap; border-bottom: 2px solid var(--border); background: var(--surface2); }
-  .items-table th:first-child { text-align: left; position: sticky; left: 0; z-index: 2; background: var(--surface2); min-width: 200px; }
+  .items-table th:first-child { text-align: left; background: var(--surface2); min-width: 200px; }
   .items-table td { padding: 7px 12px; white-space: nowrap; border-bottom: 1px solid var(--border); text-align: right; color: var(--text2); }
-  .items-table td:first-child { text-align: left; color: var(--text); position: sticky; left: 0; background: var(--surface); z-index: 1; min-width: 200px; font-size: 12px; }
+  .items-table td:first-child { text-align: left; color: var(--text); background: var(--surface); min-width: 200px; font-size: 12px; }
   .items-table tr:hover td { background: var(--surface2); }
   .items-table tr:hover td:first-child { background: var(--surface2); }
   .items-table .zero { color: var(--text3); }
@@ -72,6 +72,61 @@
   .data-status.loading { display:block; color: var(--text2); }
   .data-status.success { display:block; border-color: rgba(27,175,122,.35); color: #16865d; }
   .data-status.success { display:block; border-color: rgba(27,175,122,.35); color: #16835c; }
+
+  /* Barra horizontal visible para navegar la tabla en celular */
+  .table-scroll { scrollbar-width: auto; scrollbar-color: #8b8a84 var(--surface2); }
+  .table-scroll::-webkit-scrollbar { height: 12px; }
+  .table-scroll::-webkit-scrollbar-track { background: var(--surface2); border-top: 1px solid var(--border); }
+  .table-scroll::-webkit-scrollbar-thumb { background: #8b8a84; border-radius: 10px; border: 3px solid var(--surface2); }
+  .table-scroll::-webkit-scrollbar-thumb:hover { background: #aaa8a0; }
+
+  .scroll-hint {
+    display: none;
+    padding: 9px 12px 2px;
+    font-size: 11px;
+    color: var(--text3);
+    background: var(--surface);
+  }
+
+  .mobile-scrollbar {
+    display: none;
+    height: 16px;
+    margin: 7px 12px 12px;
+    padding: 4px 0;
+    background: var(--surface2);
+    border-radius: 20px;
+    touch-action: none;
+    cursor: grab;
+  }
+
+  .mobile-scrollbar-thumb {
+    height: 8px;
+    min-width: 42px;
+    width: 28%;
+    background: #8b8a84;
+    border-radius: 20px;
+    transform: translateX(0);
+  }
+
+  @media (max-width: 700px) {
+    .scroll-hint { display: block; }
+    .mobile-scrollbar { display: block; }
+
+    /* En celular toda la tabla se desplaza junta: el concepto no queda inmovilizado. */
+    .table-scroll {
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      touch-action: pan-x pan-y;
+    }
+
+    .items-table { min-width: max-content; }
+    .items-table th:first-child,
+    .items-table td:first-child {
+      position: static;
+      min-width: 260px;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -123,7 +178,11 @@
   </div>
   <div class="card">
     <div class="card-header">Detalle — todos los meses</div>
-    <div class="table-scroll"><table class="items-table" id="items-table"></table></div>
+    <div class="scroll-hint">Deslizá directamente sobre la tabla para ver los demás meses</div>
+    <div class="table-scroll" id="table-scroll"><table class="items-table" id="items-table"></table></div>
+    <div class="mobile-scrollbar" id="mobile-scrollbar" aria-label="Desplazar tabla horizontalmente">
+      <div class="mobile-scrollbar-thumb" id="mobile-scrollbar-thumb"></div>
+    </div>
   </div>
   <div class="footer" id="footer"></div>
 </div>
@@ -131,10 +190,10 @@
 <script>
 // ── PINS ── cambiá estos valores por los que quieras
 const PINS = {
-  mama: '1947',
-  nena: '1985',
-  lu:   '1988',
-  vale: '2003'
+  mama: '1111',
+  nena: '2222',
+  lu:   '3333',
+  vale: '4444'
 };
 
 let MESES = [];
@@ -147,7 +206,7 @@ let DATA = {};
 // ── DATOS EXTERNOS EN DROPBOX ──
 // Pegá aquí el enlace COMPARTIDO del archivo datos_gastos.json.
 // Ejemplo: https://www.dropbox.com/scl/fi/xxxxx/datos_gastos.json?rlkey=xxxxx&dl=0
-const URL_ARCHIVO_DROPBOX = 'https://dl.dropbox.com/scl/fi/6vwg74t0ge825a199nzmf/datos_gastos.json?rlkey=2ka931l7e2ofabidlwkguj43z&dl=0';
+const URL_ARCHIVO_DROPBOX = 'PEGAR_AQUI_TU_ENLACE_DL_DROPBOXUSERCONTENT';
 
 let datosDropboxCargados = false;
 let cargaDatosPromise = null;
@@ -402,6 +461,64 @@ function loadDashboard(key) {
     }).join('');
   // No se agrega fila Total al final del detalle.
   document.getElementById('items-table').innerHTML = `${header}<tbody>${body}</tbody>`;
+  configurarBarraHorizontal();
+}
+
+function configurarBarraHorizontal() {
+  const contenedor = document.getElementById('table-scroll');
+  const barra = document.getElementById('mobile-scrollbar');
+  const thumb = document.getElementById('mobile-scrollbar-thumb');
+
+  if (!contenedor || !barra || !thumb) return;
+
+  const actualizar = () => {
+    const maxScroll = contenedor.scrollWidth - contenedor.clientWidth;
+
+    if (maxScroll <= 0) {
+      barra.style.visibility = 'hidden';
+      return;
+    }
+
+    barra.style.visibility = 'visible';
+
+    const anchoBarra = barra.clientWidth;
+    const anchoThumb = Math.max(42, (contenedor.clientWidth / contenedor.scrollWidth) * anchoBarra);
+    const recorrido = Math.max(0, anchoBarra - anchoThumb);
+    const posicion = maxScroll > 0 ? (contenedor.scrollLeft / maxScroll) * recorrido : 0;
+
+    thumb.style.width = `${anchoThumb}px`;
+    thumb.style.transform = `translateX(${posicion}px)`;
+  };
+
+  if (!barra.dataset.eventsReady) {
+    let arrastrando = false;
+
+    barra.addEventListener('pointerdown', (evento) => {
+      arrastrando = true;
+      barra.setPointerCapture(evento.pointerId);
+      mover(evento);
+    });
+
+    barra.addEventListener('pointermove', (evento) => {
+      if (arrastrando) mover(evento);
+    });
+
+    barra.addEventListener('pointerup', () => { arrastrando = false; });
+    barra.addEventListener('pointercancel', () => { arrastrando = false; });
+
+    function mover(evento) {
+      const rect = barra.getBoundingClientRect();
+      const porcentaje = Math.min(1, Math.max(0, (evento.clientX - rect.left) / rect.width));
+      const maxScroll = contenedor.scrollWidth - contenedor.clientWidth;
+      contenedor.scrollLeft = porcentaje * maxScroll;
+    }
+
+    contenedor.addEventListener('scroll', actualizar, { passive: true });
+    window.addEventListener('resize', actualizar);
+    barra.dataset.eventsReady = '1';
+  }
+
+  requestAnimationFrame(actualizar);
 }
 </script>
 </body>
