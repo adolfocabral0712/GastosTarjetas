@@ -407,7 +407,7 @@ function loadDashboard(key) {
   const estable = baseEstable.length ? baseEstable.reduce((a,b)=>a+b,0) / baseEstable.length : 0;
   document.getElementById('kpis').innerHTML = `
     <div class="kpi">
-      <div class="kpi-label">Dato D1</div>
+      <div class="kpi-label">Cierres Tarjetas</div>
       <div class="kpi-val">${escapeHtml(DATO_D1 || '—')}</div>
      </div>
     <div class="kpi">
