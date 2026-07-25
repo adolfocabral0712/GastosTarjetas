@@ -202,6 +202,7 @@ const COLORS = { mama:'#2a78d6', nena:'#1baf7a', lu:'#eda100', vale:'#4a3aa7' };
 // Los datos se cargan exclusivamente desde datos_gastos.json en Dropbox.
 // No hay datos precargados dentro de este HTML.
 let DATA = {};
+let DATO_D1 = '';
 
 // ── DATOS EXTERNOS EN DROPBOX ──
 // Pegá aquí el enlace COMPARTIDO del archivo datos_gastos.json.
@@ -258,6 +259,7 @@ function validarYAplicarDatos(datos) {
 
   MESES = meses;
   DATA = personas;
+  DATO_D1 = datos.dato_d1 ?? '';
 }
 
 async function cargarDatosDropbox() {
@@ -404,6 +406,11 @@ function loadDashboard(key) {
   const baseEstable = p.totales.slice(Math.min(6, p.totales.length));
   const estable = baseEstable.length ? baseEstable.reduce((a,b)=>a+b,0) / baseEstable.length : 0;
   document.getElementById('kpis').innerHTML = `
+    <div class="kpi">
+      <div class="kpi-label">Dato D1</div>
+      <div class="kpi-val">${escapeHtml(DATO_D1 || '—')}</div>
+      <div class="kpi-sub">Valor leído desde GASTOS TARJETA!D1</div>
+    </div>
     <div class="kpi">
       <div class="kpi-label">Mes actual (${escapeHtml(MESES[0] || '—')})</div>
       <div class="kpi-val" style="color:${col}">${fmt(p.totales[0])}</div>
