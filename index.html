@@ -127,6 +127,21 @@
     }
   }
 
+  /* SELECTOR DE MESES */
+  .month-tools { position: relative; display: flex; align-items: center; gap: 8px; }
+  .month-btn { padding: 7px 11px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--text2); font-size: 12px; font-weight: 600; cursor: pointer; }
+  .month-btn:hover { background: var(--border); }
+  .month-panel { display: none; position: absolute; z-index: 30; right: 0; top: calc(100% + 8px); width: min(330px, calc(100vw - 32px)); padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: 0 14px 40px rgba(0,0,0,.18); }
+  .month-panel.open { display: block; }
+  .month-panel-title { font-size: 12px; font-weight: 700; color: var(--text2); margin-bottom: 10px; }
+  .month-quick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .month-quick button { padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--text2); font-size: 11px; cursor: pointer; }
+  .month-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; max-height: 220px; overflow-y: auto; }
+  .month-option { display: flex; align-items: center; gap: 7px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); font-size: 11px; color: var(--text2); cursor: pointer; user-select: none; }
+  .month-option input { accent-color: #2a78d6; }
+  .month-note { margin-top: 10px; font-size: 10px; line-height: 1.35; color: var(--text3); }
+  @media (max-width: 700px) { .month-list { grid-template-columns: repeat(2, 1fr); } .card-header { align-items: flex-start; gap: 10px; } }
+
 </style>
 </head>
 <body>
@@ -177,7 +192,21 @@
     <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
   </div>
   <div class="card">
-    <div class="card-header">Detalle — todos los meses</div>
+    <div class="card-header">
+      <span>Detalle por mes</span>
+      <div class="month-tools">
+        <button class="month-btn" id="month-selector-btn" type="button" onclick="toggleSelectorMeses(event)">Seleccionar meses</button>
+        <div class="month-panel" id="month-panel">
+          <div class="month-panel-title">Columnas visibles</div>
+          <div class="month-quick">
+            <button type="button" onclick="mostrarDesdeMesActual()">Desde mes actual</button>
+            <button type="button" onclick="mostrarTodosLosMeses()">Mostrar todos</button>
+          </div>
+          <div class="month-list" id="month-list"></div>
+          <div class="month-note">Los meses anteriores quedan ocultos inicialmente. Tu selección se guarda en este navegador.</div>
+        </div>
+      </div>
+    </div>
     <div class="scroll-hint">Deslizá directamente sobre la tabla para ver los demás meses</div>
     <div class="table-scroll" id="table-scroll"><table class="items-table" id="items-table"></table></div>
     <div class="mobile-scrollbar" id="mobile-scrollbar" aria-label="Desplazar tabla horizontalmente">
@@ -203,6 +232,9 @@ const COLORS = { mama:'#2a78d6', nena:'#1baf7a', lu:'#eda100', vale:'#4a3aa7' };
 // No hay datos precargados dentro de este HTML.
 let DATA = {};
 let DATO_D1 = '';
+let USUARIO_ACTUAL = '';
+let MESES_VISIBLES = [];
+const CLAVE_MESES_VISIBLES = 'gastos_tarjeta_meses_visibles_v1';
 
 // ── DATOS EXTERNOS EN DROPBOX ──
 // Pegá aquí el enlace COMPARTIDO del archivo datos_gastos.json.
@@ -371,6 +403,9 @@ async function checkPin() {
       return;
     }
 
+    USUARIO_ACTUAL = match;
+    cargarMesesVisibles();
+    renderSelectorMeses();
     loadDashboard(match);
   } else {
     updateDots('error');
@@ -385,6 +420,8 @@ function logout() {
   document.getElementById('login-error').textContent = '';
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
+  USUARIO_ACTUAL = '';
+  document.getElementById('month-panel')?.classList.remove('open');
   if (chartInst) { chartInst.destroy(); chartInst = null; }
 }
 
@@ -394,10 +431,148 @@ function fmt(v) {
   return v < 0 ? '-' + s : s;
 }
 
+function obtenerIndiceMesActual() {
+  const ahora = new Date();
+  const partes = new Intl.DateTimeFormat('es-UY', {
+    timeZone: 'America/Montevideo',
+    month: 'numeric',
+    year: '2-digit'
+  }).formatToParts(ahora);
+
+  const mesActual = Number(partes.find(p => p.type === 'month')?.value || 0);
+  const anioActual = Number(partes.find(p => p.type === 'year')?.value || 0);
+
+  const mapaMeses = {
+    ene: 1,
+    feb: 2,
+    mar: 3,
+    abr: 4,
+    may: 5,
+    jun: 6,
+    jul: 7,
+    ago: 8,
+    sep: 9,
+    set: 9,
+    oct: 10,
+    nov: 11,
+    dic: 12
+  };
+
+  const indice = MESES.findIndex(valor => {
+    const texto = String(valor || '').trim().toLowerCase();
+    const coincidencia = texto.match(/^([a-záéíóúñ]{3})[-\s]?(\d{2}|\d{4})$/i);
+    if (!coincidencia) return false;
+
+    const mes = mapaMeses[coincidencia[1].normalize('NFD').replace(/[\u0300-\u036f]/g, '')];
+    const anioTexto = Number(coincidencia[2]);
+    const anio = coincidencia[2].length === 2 ? anioTexto : anioTexto % 100;
+
+    return mes === mesActual && anio === anioActual;
+  });
+
+  return indice >= 0 ? indice : 0;
+}
+
+
+function cargarMesesVisibles() {
+  const indiceActual = obtenerIndiceMesActual();
+  const predeterminados = MESES.slice(indiceActual);
+
+  try {
+    const guardados = JSON.parse(localStorage.getItem(CLAVE_MESES_VISIBLES) || 'null');
+    if (Array.isArray(guardados)) {
+      const validos = guardados.filter(m => MESES.includes(m));
+      MESES_VISIBLES = validos.length ? validos : predeterminados;
+    } else {
+      MESES_VISIBLES = predeterminados;
+    }
+  } catch (_) {
+    MESES_VISIBLES = predeterminados;
+  }
+
+  asegurarOrdenMesesVisibles();
+}
+
+function asegurarOrdenMesesVisibles() {
+  MESES_VISIBLES = MESES.filter(m => MESES_VISIBLES.includes(m));
+  if (!MESES_VISIBLES.length && MESES.length) {
+    MESES_VISIBLES = [MESES[obtenerIndiceMesActual()] || MESES[0]];
+  }
+}
+
+function guardarMesesVisibles() {
+  asegurarOrdenMesesVisibles();
+  try {
+    localStorage.setItem(CLAVE_MESES_VISIBLES, JSON.stringify(MESES_VISIBLES));
+  } catch (_) {}
+}
+
+function indicesMesesVisibles() {
+  asegurarOrdenMesesVisibles();
+  return MESES_VISIBLES.map(m => MESES.indexOf(m)).filter(i => i >= 0);
+}
+
+function renderSelectorMeses() {
+  const lista = document.getElementById('month-list');
+  const boton = document.getElementById('month-selector-btn');
+  if (!lista || !boton) return;
+
+  lista.innerHTML = MESES.map(m => `
+    <label class="month-option">
+      <input type="checkbox" ${MESES_VISIBLES.includes(m) ? 'checked' : ''} onchange="cambiarVisibilidadMes('${escapeHtml(m)}', this.checked)">
+      <span>${escapeHtml(m)}</span>
+    </label>`).join('');
+
+  boton.textContent = `Meses (${MESES_VISIBLES.length})`;
+}
+
+function cambiarVisibilidadMes(mes, visible) {
+  if (visible) {
+    if (!MESES_VISIBLES.includes(mes)) MESES_VISIBLES.push(mes);
+  } else {
+    MESES_VISIBLES = MESES_VISIBLES.filter(m => m !== mes);
+  }
+  guardarMesesVisibles();
+  renderSelectorMeses();
+  if (USUARIO_ACTUAL) loadDashboard(USUARIO_ACTUAL);
+}
+
+function mostrarDesdeMesActual() {
+  MESES_VISIBLES = MESES.slice(obtenerIndiceMesActual());
+  guardarMesesVisibles();
+  renderSelectorMeses();
+  if (USUARIO_ACTUAL) loadDashboard(USUARIO_ACTUAL);
+}
+
+function mostrarTodosLosMeses() {
+  MESES_VISIBLES = [...MESES];
+  guardarMesesVisibles();
+  renderSelectorMeses();
+  if (USUARIO_ACTUAL) loadDashboard(USUARIO_ACTUAL);
+}
+
+function toggleSelectorMeses(evento) {
+  evento?.stopPropagation();
+  document.getElementById('month-panel')?.classList.toggle('open');
+}
+
+document.addEventListener('click', (evento) => {
+  const panel = document.getElementById('month-panel');
+  const herramientas = document.querySelector('.month-tools');
+  if (panel?.classList.contains('open') && herramientas && !herramientas.contains(evento.target)) {
+    panel.classList.remove('open');
+  }
+});
+
 function loadDashboard(key) {
   const p = DATA[key];
   const col = COLORS[key];
-  const d = new Date().toLocaleDateString('es-UY', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const indicesVisibles = indicesMesesVisibles();
+  const mesesVista = indicesVisibles.map(i => MESES[i]);
+  const totalesVista = indicesVisibles.map(i => p.totales[i] ?? 0);
+  const indiceMesActual = obtenerIndiceMesActual();
+  const indiceMesProximo = Math.min(indiceMesActual + 1, MESES.length - 1);
+  const d = new Date().toLocaleDateString('es-UY', { timeZone:'America/Montevideo', weekday:'long', day:'numeric', month:'long', year:'numeric' });
   const dl = d.charAt(0).toUpperCase() + d.slice(1);
   document.getElementById('hoy').textContent = dl;
   document.getElementById('footer').textContent = 'Datos leídos desde Dropbox · Actualizado al ' + dl;
@@ -411,13 +586,13 @@ function loadDashboard(key) {
       <div class="kpi-val">${escapeHtml(DATO_D1 || '—')}</div>
      </div>
     <div class="kpi">
-      <div class="kpi-label">Mes actual (${escapeHtml(MESES[0] || '—')})</div>
-      <div class="kpi-val" style="color:${col}">${fmt(p.totales[0])}</div>
+      <div class="kpi-label">Mes actual (${escapeHtml(MESES[indiceMesActual] || '—')})</div>
+      <div class="kpi-val" style="color:${col}">${fmt(p.totales[indiceMesActual] ?? 0)}</div>
       <div class="kpi-sub">Monto a pagar este mes</div>
     </div>
     <div class="kpi">
-      <div class="kpi-label">Próximo mes (${escapeHtml(MESES[1] || '—')})</div>
-      <div class="kpi-val">${fmt(p.totales[1])}</div>
+      <div class="kpi-label">Próximo mes (${escapeHtml(MESES[indiceMesProximo] || '—')})</div>
+      <div class="kpi-val">${fmt(p.totales[indiceMesProximo] ?? 0)}</div>
       <div class="kpi-sub">Proyectado</div>
     </div>
     <div class="kpi">
@@ -435,8 +610,8 @@ function loadDashboard(key) {
   chartInst = new Chart(document.getElementById('mainChart'), {
     type: 'bar',
     data: {
-      labels: MESES,
-      datasets: [{ data: p.totales, backgroundColor: col+'88', borderColor: col, borderWidth:1, borderRadius:4 }]
+      labels: mesesVista,
+      datasets: [{ data: totalesVista, backgroundColor: col+'88', borderColor: col, borderWidth:1, borderRadius:4 }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -449,7 +624,7 @@ function loadDashboard(key) {
   });
 
   // Table
-  const header = `<thead><tr><th>Concepto</th>${MESES.map(m=>`<th>${m}</th>`).join('')}</tr></thead>`;
+  const header = `<thead><tr><th>Concepto</th>${mesesVista.map(m=>`<th>${m}</th>`).join('')}</tr></thead>`;
   // Muestra solo conceptos con al menos un importe distinto de cero.
   // Así se ocultan filas sin datos, aunque tengan texto en la primera columna.
   const body = p.items
@@ -459,7 +634,7 @@ function loadDashboard(key) {
       return concepto !== '' && tieneImporte;
     })
     .map(it => {
-      const celdas = it.v.map(v => v===0
+      const celdas = indicesVisibles.map(i => Number(it.v[i] ?? 0)).map(v => v===0
         ? `<td class="zero">—</td>`
         : `<td class="${v<0?'neg':''}">${fmt(v)}</td>`
       ).join('');
