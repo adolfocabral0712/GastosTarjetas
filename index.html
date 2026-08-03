@@ -625,13 +625,15 @@ function loadDashboard(key) {
 
   // Table
   const header = `<thead><tr><th>Concepto</th>${mesesVista.map(m=>`<th>${m}</th>`).join('')}</tr></thead>`;
-  // Muestra solo conceptos con al menos un importe distinto de cero.
-  // Así se ocultan filas sin datos, aunque tengan texto en la primera columna.
+  // Oculta solamente las filas que están vacías en TODOS los meses visibles.
+  // Si el primer mes no tiene importe pero alguno de los siguientes sí, la fila se conserva.
   const body = p.items
     .filter(it => {
       const concepto = String(it.n ?? '').trim();
-      const tieneImporte = Array.isArray(it.v) && it.v.some(v => Number(v) !== 0);
-      return concepto !== '' && tieneImporte;
+      const tieneImporteEnAlgunMesVisible = indicesVisibles.some(i =>
+        Number(it.v?.[i] ?? 0) !== 0
+      );
+      return concepto !== '' && tieneImporteEnAlgunMesVisible;
     })
     .map(it => {
       const celdas = indicesVisibles.map(i => Number(it.v[i] ?? 0)).map(v => v===0
